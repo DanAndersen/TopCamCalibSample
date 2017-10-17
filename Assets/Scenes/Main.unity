@@ -428,7 +428,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   Port: 4434
-  ProcessFramesNumSeconds: 5
+  ProcessFramesNumSeconds: 20
 --- !u!1001 &604584783
 Prefab:
   m_ObjectHideFlags: 0

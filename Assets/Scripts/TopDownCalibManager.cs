@@ -8,6 +8,7 @@ using System.Text;
 using UnityEngine.VR.WSA;
 using HoloLensCameraStream;
 using SimpleJSON;
+using System.Runtime.InteropServices;
 #if NETFX_CORE
 using Windows.Storage.Streams;
 using Windows.Networking.Sockets;
@@ -18,6 +19,31 @@ using System.Net.Sockets;
 
 // based on tutorial at https://github.com/WorldOfZero/Data-Sphere/blob/master/Assets/DataSphere/Scripts/Stream/NamedServerStream.cs
 public class TopDownCalibManager : MonoBehaviour {
+
+
+
+    private string TEST_RECEIVED_MSG_FROM_TOPDOWN = "{\"cx\": 328.90630324279033, \"cy\": 237.78931042000124, \"fx\": 514.24881005892848, \"fy\": 507.79248508954851, \"height\": 480, \"k1\": 0.0914051948147546, \"k2\": -0.22685463029938513, \"k3\": 0.18341275494159623, \"p1\": -0.022599626729701242, \"p2\": 0.002208592710481527, \"rms\": 0.39623399395854214, \"rvec\": [-0.56421140493062671, 0.13848225878287804, 1.5148059105975371], \"tvec\": [-0.12750654138887974, -0.10572477988368999, 0.59374010237582], \"width\": 640, \"chess_x\": 5, \"chess_y\": 7, \"chess_square_size_meters\": 0.03}";
+
+
+
+    byte[] processedImageData;
+
+
+    // data from prior intrinsic calibration of HoloLens onboard camera
+    private int HoloCam_width = 896;
+    private int HoloCam_height = 504;
+    private float HoloCam_fx = 1036.9226280151522f;
+    private float HoloCam_fy = 1030.7726852885578f;
+    private float HoloCam_cx = 418.94203870262618f;
+    private float HoloCam_cy = 220.95540290443628f;
+
+    private float HoloCam_k1 = 0.12101663007339994f;
+    private float HoloCam_k2 = 0.28401957063644756f;
+    private float HoloCam_p1 = 0.00045032788703551724f;
+    private float HoloCam_p2 = 0.0089711112978037508f;
+    private float HoloCam_k3 = -1.1607259918955408f;
+
+
 
     public int Port = 4434;
 
@@ -39,7 +65,7 @@ public class TopDownCalibManager : MonoBehaviour {
     JSONNode topDownCameraCalibrationData = null;
 
     bool _processingCameraFrames = false;
-    public float ProcessFramesNumSeconds = 5.0f;
+    public float ProcessFramesNumSeconds = 20.0f;
 
     IntPtr _spatialCoordinateSystemPtr;
     VideoPanel _videoPanelUI;
@@ -48,8 +74,55 @@ public class TopDownCalibManager : MonoBehaviour {
     CameraParameters _cameraParams;
     byte[] _latestImageBytes;
 
+
+
+
+
+
+
+
+    // ARUCO native functions
+    [DllImport("HoloOpenCVHelper")]
+    public static extern void initChessPoseController();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern void destroyChessPoseController();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern void newImage(IntPtr imageData);
+    [DllImport("HoloOpenCVHelper")]
+    public static extern void setImageSize(int row, int col);
+    [DllImport("HoloOpenCVHelper")]
+    public static extern void detect();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern IntPtr getProcessedImage();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern int getNumMarkers();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern int getSize();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern int getRows();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern int getCols();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern int getInt();
+
+
+
+
+
+
+
+
+
+
+
+
     // Use this for initialization
     void Start () {
+        
+
+
+
+
 
         //Fetch a pointer to Unity's spatial coordinate system if you need pixel mapping
         _spatialCoordinateSystemPtr = WorldManager.GetNativeISpatialCoordinateSystemPtr();
@@ -86,6 +159,12 @@ public class TopDownCalibManager : MonoBehaviour {
         CameraStreamHelper.Instance.SetNativeISpatialCoordinateSystemPtr(_spatialCoordinateSystemPtr);
 
         _resolution = CameraStreamHelper.Instance.GetLowestResolution();
+
+        processedImageData = new byte[_resolution.height * _resolution.width * 4];
+
+        initChessPoseController();
+        setImageSize(_resolution.height, _resolution.width);
+
         float frameRate = CameraStreamHelper.Instance.GetHighestFrameRate(_resolution);
         //videoCapture.FrameSampleAcquired += OnFrameSampleAcquired;
 
@@ -106,6 +185,13 @@ public class TopDownCalibManager : MonoBehaviour {
         UnityEngine.WSA.Application.InvokeOnAppThread(() => { _videoPanelUI.SetResolution(_resolution.width, _resolution.height); }, false);
 
         Debug.Log("Set up video capture. Ready to record.");
+
+
+
+        Debug.Log("DUMMY INIT: mocking input coming in from top-down cam");
+        // DUMMY:
+        // act as if we have received the mock message...
+        incomingMessageQueue.Enqueue(TEST_RECEIVED_MSG_FROM_TOPDOWN);
     }
 
     private void OnDestroy()
@@ -129,6 +215,8 @@ public class TopDownCalibManager : MonoBehaviour {
             _tcpListenerThread = null;
         }
 #endif
+
+        destroyChessPoseController();
     }
 
     private IEnumerator ProcessCameraFrames(float numSeconds)
@@ -200,7 +288,21 @@ public class TopDownCalibManager : MonoBehaviour {
             _videoPanelUI.SetBytes(_latestImageBytes);
 
             Texture2D tex = _videoPanelUI.rawImage.texture as Texture2D;
-            
+
+            Color32[] c = tex.GetPixels32();
+            IntPtr imageHandle = getImageHandle(c);
+            newImage(imageHandle);
+
+            // do any detection here...
+
+            //// Fetch the processed image and render
+            imageHandle = getProcessedImage();
+            Marshal.Copy(imageHandle, processedImageData, 0, _resolution.width * _resolution.height * 4);
+            tex.LoadRawTextureData(processedImageData);
+            tex.Apply();
+
+
+
             Vector3 cameraWorldPosition = cameraToWorldMatrix.MultiplyPoint(Vector3.zero);
             Quaternion cameraWorldRotation = Quaternion.LookRotation(-cameraToWorldMatrix.GetColumn(2), cameraToWorldMatrix.GetColumn(1));
             
@@ -219,6 +321,23 @@ public class TopDownCalibManager : MonoBehaviour {
         {
             this._videoCapture.StopVideoModeAsync(OnVideoModeStopped);
         }
+    }
+
+    private static IntPtr getImageHandle(Color32[] colors)
+    {
+        IntPtr ptr;
+        GCHandle handle = default(GCHandle);
+        try
+        {
+            handle = GCHandle.Alloc(colors, GCHandleType.Pinned);
+            ptr = handle.AddrOfPinnedObject();
+        }
+        finally
+        {
+            if (handle != default(GCHandle))
+                handle.Free();
+        }
+        return ptr;
     }
 
     private void OnVideoModeStopped(VideoCaptureResult result)
