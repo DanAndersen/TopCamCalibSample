@@ -105,8 +105,24 @@ public class TopDownCalibManager : MonoBehaviour {
     [DllImport("HoloOpenCVHelper")]
     public static extern int getInt();
 
+    [DllImport("HoloOpenCVHelper")]
+    public static extern bool findExtrinsics(
+            int chessX, int chessY, float chessSquareMeters,
+            double cam_mtx_fx, double cam_mtx_fy, double cam_mtx_cx, double cam_mtx_cy,
+            double dist_k1, double dist_k2, double dist_p1, double dist_p2, double dist_k3);
 
-
+    [DllImport("HoloOpenCVHelper")]
+    public static extern double GetRvec0();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern double GetRvec1();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern double GetRvec2();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern double GetTvec0();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern double GetTvec1();
+    [DllImport("HoloOpenCVHelper")]
+    public static extern double GetTvec2();
 
 
 
@@ -191,7 +207,7 @@ public class TopDownCalibManager : MonoBehaviour {
         Debug.Log("DUMMY INIT: mocking input coming in from top-down cam");
         // DUMMY:
         // act as if we have received the mock message...
-        incomingMessageQueue.Enqueue(TEST_RECEIVED_MSG_FROM_TOPDOWN);
+        incomingMessageQueue.Enqueue(TEST_RECEIVED_MSG_FROM_TOPDOWN);   // COMMENT THIS LINE OUT if you are not wanting to use mock incoming top-down camera app data
     }
 
     private void OnDestroy()
@@ -285,6 +301,10 @@ public class TopDownCalibManager : MonoBehaviour {
         //This is where we actually use the image data
         UnityEngine.WSA.Application.InvokeOnAppThread(() =>
         {
+            Vector3 cameraWorldPosition = cameraToWorldMatrix.MultiplyPoint(Vector3.zero);
+            Quaternion cameraWorldRotation = Quaternion.LookRotation(-cameraToWorldMatrix.GetColumn(2), cameraToWorldMatrix.GetColumn(1));
+
+
             _videoPanelUI.SetBytes(_latestImageBytes);
 
             Texture2D tex = _videoPanelUI.rawImage.texture as Texture2D;
@@ -295,6 +315,61 @@ public class TopDownCalibManager : MonoBehaviour {
 
             // do any detection here...
 
+            int chessX = topDownCameraCalibrationData["chess_x"].AsInt;
+            int chessY = topDownCameraCalibrationData["chess_y"].AsInt;
+            float chessSquareMeters = topDownCameraCalibrationData["chess_square_size_meters"].AsFloat;
+            double cam_mtx_fx = topDownCameraCalibrationData["fx"].AsDouble;
+            double cam_mtx_fy = topDownCameraCalibrationData["fy"].AsDouble;
+            double cam_mtx_cx = topDownCameraCalibrationData["cx"].AsDouble;
+            double cam_mtx_cy = topDownCameraCalibrationData["cy"].AsDouble;
+            double dist_k1 = topDownCameraCalibrationData["k1"].AsDouble;
+            double dist_k2 = topDownCameraCalibrationData["k2"].AsDouble;
+            double dist_p1 = topDownCameraCalibrationData["p1"].AsDouble;
+            double dist_p2 = topDownCameraCalibrationData["p2"].AsDouble;
+            double dist_k3 = topDownCameraCalibrationData["k3"].AsDouble;
+
+            bool gotValidPose = findExtrinsics(chessX, chessY, chessSquareMeters, cam_mtx_fx, cam_mtx_fy, cam_mtx_cx, cam_mtx_cy, dist_k1, dist_k2, dist_p1, dist_p2, dist_k3);
+
+            if (gotValidPose)
+            {
+                Debug.Log("Got valid pose!");
+
+                List<double> rvec = new List<double>();
+                rvec.Add(GetRvec0());
+                rvec.Add(GetRvec1());
+                rvec.Add(GetRvec2());
+
+                List<double> tvec = new List<double>();
+                tvec.Add(GetTvec0());
+                tvec.Add(GetTvec1());
+                tvec.Add(GetTvec2());
+
+                Debug.Log("rvec between HoloLens camera and chessboard is " + rvec[0] + " " + rvec[1] + " " + rvec[2]);
+                Debug.Log("tvec between HoloLens camera and chessboard is " + tvec[0] + " " + tvec[1] + " " + tvec[2]);
+
+
+
+
+                // NOTE: At this point, we should STOP the HoloLens frame processing by:
+                // 1: setting _processingCameraFrames to FALSE
+                // 2: calling StopCameraProcessing()
+
+                // the data we have available is:
+                // --- rvec and tvec (the pose data between the HoloLens camera and the chessboard)
+                // --- topDownCameraCalibrationData ... the received data from the top-down camera app, which includes:
+                // ------ topDownCameraCalibrationData["rvec"] ... the pose between the top-down camera and the chessboard
+                // ------ topDownCameraCalibrationData["tvec"]
+                // ------ topDownCameraCalibrationData["fx"], fy, cx, cy (the top-down camera matrix)
+                // ------ topDownCameraCalibrationData["k1"], k2, p1, p2, k3 (the top-down camera distortion coefficients)
+                // --- cameraWorldPosition and cameraWorldRotation (the pose data in Unity's coord system between the HoloLens camera and the world)
+
+                // _processingCameraFrames = false;
+                // StopCameraProcessing();
+
+
+            }
+
+
             //// Fetch the processed image and render
             imageHandle = getProcessedImage();
             Marshal.Copy(imageHandle, processedImageData, 0, _resolution.width * _resolution.height * 4);
@@ -303,8 +378,7 @@ public class TopDownCalibManager : MonoBehaviour {
 
 
 
-            Vector3 cameraWorldPosition = cameraToWorldMatrix.MultiplyPoint(Vector3.zero);
-            Quaternion cameraWorldRotation = Quaternion.LookRotation(-cameraToWorldMatrix.GetColumn(2), cameraToWorldMatrix.GetColumn(1));
+            
             
             if (_processingCameraFrames)
             {
