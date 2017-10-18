@@ -239,8 +239,8 @@ public class TopDownCalibManager : MonoBehaviour {
     {
         StartCameraProcessing();
 
+        // if you are not just testing, comment out the following lines! That way, the camera will stay on until it has the needed chessboard corners and will not turn off after X seconds
         yield return new WaitForSeconds(numSeconds);
-
         StopCameraProcessing();
     }
 
