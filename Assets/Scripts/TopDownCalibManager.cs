@@ -318,15 +318,15 @@ public class TopDownCalibManager : MonoBehaviour {
             int chessX = topDownCameraCalibrationData["chess_x"].AsInt;
             int chessY = topDownCameraCalibrationData["chess_y"].AsInt;
             float chessSquareMeters = topDownCameraCalibrationData["chess_square_size_meters"].AsFloat;
-            double cam_mtx_fx = topDownCameraCalibrationData["fx"].AsDouble;
-            double cam_mtx_fy = topDownCameraCalibrationData["fy"].AsDouble;
-            double cam_mtx_cx = topDownCameraCalibrationData["cx"].AsDouble;
-            double cam_mtx_cy = topDownCameraCalibrationData["cy"].AsDouble;
-            double dist_k1 = topDownCameraCalibrationData["k1"].AsDouble;
-            double dist_k2 = topDownCameraCalibrationData["k2"].AsDouble;
-            double dist_p1 = topDownCameraCalibrationData["p1"].AsDouble;
-            double dist_p2 = topDownCameraCalibrationData["p2"].AsDouble;
-            double dist_k3 = topDownCameraCalibrationData["k3"].AsDouble;
+            double cam_mtx_fx = HoloCam_fx;
+            double cam_mtx_fy = HoloCam_fy;
+            double cam_mtx_cx = HoloCam_cx;
+            double cam_mtx_cy = HoloCam_cy;
+            double dist_k1 = HoloCam_k1;
+            double dist_k2 = HoloCam_k2;
+            double dist_p1 = HoloCam_p1;
+            double dist_p2 = HoloCam_p2;
+            double dist_k3 = HoloCam_k3;
 
             bool gotValidPose = findExtrinsics(chessX, chessY, chessSquareMeters, cam_mtx_fx, cam_mtx_fy, cam_mtx_cx, cam_mtx_cy, dist_k1, dist_k2, dist_p1, dist_p2, dist_k3);
 
@@ -363,8 +363,9 @@ public class TopDownCalibManager : MonoBehaviour {
                 // ------ topDownCameraCalibrationData["k1"], k2, p1, p2, k3 (the top-down camera distortion coefficients)
                 // --- cameraWorldPosition and cameraWorldRotation (the pose data in Unity's coord system between the HoloLens camera and the world)
 
-                // _processingCameraFrames = false;
+
                 // StopCameraProcessing();
+                // _processingCameraFrames = false;
 
 
             }
@@ -391,10 +392,7 @@ public class TopDownCalibManager : MonoBehaviour {
     {
         Debug.Log("Stopping camera processing...");
 
-        if (_processingCameraFrames)
-        {
-            this._videoCapture.StopVideoModeAsync(OnVideoModeStopped);
-        }
+        this._videoCapture.StopVideoModeAsync(OnVideoModeStopped);
     }
 
     private static IntPtr getImageHandle(Color32[] colors)
